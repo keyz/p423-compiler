@@ -178,7 +178,9 @@ static void usage_error(char *who) {
   exit(1);
 }
 
-/* #define SCHEME_PRINTER*/
+// RRN: Later in the compiler we turn this on.  It prints scheme ptrs
+// rather than raw words:
+#define SCHEME_PRINTER
 
 #ifdef SCHEME_PRINTER
 
@@ -241,13 +243,14 @@ static void print1(ptr x, int d) {
       y = CDR(y);
       len++;
     }
-    if (y != _nil)
-      if (len == MAXLENGTH-1)
+    if (y != _nil) {
+      if (len == MAXLENGTH-1) {
         printf(" ...");
-      else {
+      } else {
         printf(" . ");
         print1(y, d+1);
       }
+    }
     printf(")");
   } else if (TAG(x, mask_vector) == tag_vector) {
     long i, n;
@@ -280,7 +283,7 @@ static void print1(ptr x, int d) {
   } else if (x == _void) {
     printf("#<void>");
   } else {
-    fprintf(stderr, "print (runtime.c): invalid ptr #x%x\n", x);
+    fprintf(stderr, "print (runtime.c): invalid ptr #x%lx\n", x);
     exit(1);
   }
 }

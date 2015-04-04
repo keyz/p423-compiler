@@ -72,7 +72,8 @@ Var      ::= UVar | Loc
   (import
     (chezscheme)
     (Framework helpers)
-    (Framework match))
+    (Framework match)
+    (Compiler utils))
 
   (define-who assign-registers
 
@@ -89,7 +90,7 @@ Var      ::= UVar | Loc
     (define select-register
       (lambda (var conflict* home*)
         (let ([used* (find-used conflict* home*)])
-          (let ([available* (difference registers used*)])
+          (let ([available* (hdifference registers used*)])
             (and (not (null? available*)) (car available*))))))
 
     (define rem-conflicts!
@@ -135,11 +136,11 @@ Var      ::= UVar | Loc
          ;; will have to be told which variables are spillable.
          (let ([uvar* (append local* ulocal*)])
            (let ([home* (find-homes uvar* ct)])
-             (let ([spill* (difference uvar* (map car home*))])
+             (let ([spill* (hdifference uvar* (map car home*))])
                (cond
                 [(null? spill*) `(locate (,frame-home* ... ,home* ...) ,tail)]
                 [(null? (intersection ulocal* spill*))
-                 (let ([local* (difference local* spill*)])
+                 (let ([local* (hdifference local* spill*)])
                    `(locals (,local* ...)
                       (ulocals (,ulocal* ...)
                         (spills (,spill* ...)
@@ -147,7 +148,7 @@ Var      ::= UVar | Loc
                             (frame-conflict ,fv-ct ,tail))))))]
                 [else
                  (error who "unspillable variables (~s) have been spilled"
-                        (difference spill* local*))]))))]
+                        (hdifference spill* local*))]))))]
         [(locate (,home* ...) ,tail) `(locate (,home* ...) ,tail)]
         [,x (error who "invalid Body ~s" x)]))
 

@@ -42,7 +42,6 @@ defaultP423Config = P423Config
          , returnAddressRegister     = R15
          , returnValueRegister       = RAX
          , parameterRegisters        = [R8,R9]
-         , runWrappers               = True
          }
 
 catchTestFailures :: P423Exception -> Maybe P423Exception

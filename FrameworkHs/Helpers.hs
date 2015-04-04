@@ -23,7 +23,30 @@ module FrameworkHs.Helpers
              , trace
              )
   , Option (..)
-    
+  
+  -- * Helpers for representations
+  , fixnumBits
+  , shiftFixnum
+  , maskFixnum
+  , maskVector
+  , maskPair
+  , maskProcedure
+  , maskBoolean
+  , tagFixnum
+  , tagPair
+  , tagProcedure
+  , tagVector
+  , tagBoolean
+  , tagNonfixnum
+  , repTrue
+  , repFalse
+  , repNil
+  , repVoid
+  , dispCar
+  , dispCdr
+  , dispVectorData
+  , dispVectorLength
+  , sizePair
   -- * An alternative `Show` class for printing to X86 assembly code:
   , X86Print, format
   , OpCode
@@ -54,11 +77,13 @@ module FrameworkHs.Helpers
   , parseReg
   , parseInt32
   , parseInt64
+  , parseValPrim, parseEffectPrim, parsePredPrim
     
   -- * Misc numeric and string helpers
   , isInt32
   , isInt64
   , isUInt6
+  , isFixnum
   , wordShift
   , ash
   , chomp
@@ -71,6 +96,7 @@ import Data.List (intersperse)
 import Data.Set (size, fromList)
 import Data.Char (isDigit, isSpace, isAlpha)
 import Data.Int
+import Data.Bits
 import Data.ByteString (ByteString, hPut)
 -- import Data.ByteString (ByteString, hPut)
 import Data.ByteString.Char8 (unpack)
@@ -506,21 +532,18 @@ instance PP EffectPrim where
     SetCar    -> fromString "set-car!"
     SetCdr    -> fromString "set-cdr!"
     VectorSet -> fromString "vector-set!"
-    ProcedureSet -> fromString "procedure-set!"
 
 instance PP PredPrim where
   pp p = fromString $ case p of
     Lt -> "<" ; Lte -> "<=" ; Eq -> "=" ; Gte -> ">=" ; Gt -> ">"
     BooleanP -> "boolean?" ; EqP -> "eq?" ; FixnumP -> "fixnum?"
     NullP -> "null?" ; PairP -> "pair?" ; VectorP -> "vector?"
-    ProcedureP -> "procedure?"
 
 instance PP ValPrim where
   pp p = fromString$ case p of    
     Times -> "*" ; Plus -> "+" ; Minus -> "-"; Car -> "car" ; Cdr -> "cdr" ; Cons -> "cons"
     MakeVector -> "make-vector" ; VectorLength -> "vector-length" ; VectorRef -> "vector-ref"
     Void -> "void"
-    MakeProcedure -> "make-procedure" ; ProcedureCode -> "procedure-code" ; ProcedureRef -> "procedure-ref"
 
 instance PP Immediate where
   pp p = fromString$ case p of
@@ -528,25 +551,6 @@ instance PP Immediate where
     NullList -> "()"
     HashT -> "#t"
     HashF -> "#f"
-
-instance PP Datum where
-  pp p = case p of
-    PairDatum car cdr ->
-      case gatherPairs cdr of
-        Just ls -> parens (pp car `mappend` (mconcat (map ((spc `mappend`) . pp) ls)))
-        Nothing -> parens (pp car `mappend` (fromString " . ") `mappend` pp cdr)
-    VectorDatum ls -> fromString "#" `mappend`
-                      parens (mconcat (intersperse spc (map pp ls)))
-    ImmediateDatum i -> pp i
-   where
-     spc        = fromString " "
-     parens bld = fromString "(" `mappend` bld `mappend` fromString ")"
-     gatherPairs (ImmediateDatum NullList) = Just []
-     gatherPairs (PairDatum x y) = 
-        case gatherPairs y of
-           Nothing -> Nothing
-           Just ls -> Just (x:ls)
-     gatherPairs _ = Nothing
 
 ------------------------------------------------------------
 -- Parsing -------------------------------------------------
@@ -662,6 +666,49 @@ parseInt64 (IntNumber i) = if isInt64 n
   where n = fromIntegral i
 parseInt64 e = parseFailureM ("parseInt64: Not an int: " ++ show e)
 
+
+-- TODO: Could use a single association list to go both directions:
+parseValPrim :: LispVal -> PassM ValPrim
+parseValPrim (Symbol s) = case s of
+  "*"      -> return Times
+  "+"      -> return Plus
+  "-"      -> return Minus
+  "car"    -> return Car
+  "cdr"    -> return Cdr
+  "cons"   -> return Cons
+  "make-vector" -> return MakeVector
+  "vector-length" -> return VectorLength
+  "vector-ref"    -> return VectorRef
+  "void"          -> return Void
+  e        -> parseFailureM ("parseValPrim: Not a value primitive: " ++ e)
+parseValPrim e = parseFailureM ("parseValPrim: Not a symbol: " ++ show e)
+
+parsePredPrim :: LispVal -> PassM PredPrim
+parsePredPrim (Symbol s) = case s of
+  "<"      -> return Lt
+  "<="     -> return Lte
+  "="      -> return Eq
+  ">="     -> return Gte
+  ">"      -> return Gt
+  "boolean?" -> return BooleanP
+  "eq?"      -> return EqP
+  "fixnum?"  -> return FixnumP
+  "null?"    -> return NullP
+  "pair?"    -> return PairP
+  "vector?"  -> return VectorP     
+  e        -> parseFailureM ("parsePredPrim: Not a pred primitive: " ++ e)
+parsePredPrim e = parseFailureM ("parsePredPrim: Not a symbol: " ++ show e)
+
+parseEffectPrim :: LispVal -> PassM EffectPrim
+parseEffectPrim (Symbol s) = case s of
+  "set-car!" -> return SetCar
+  "set-cdr!" -> return SetCdr
+  "vector-set!"-> return VectorSet
+  e        -> parseFailureM ("parseEffectPrim: Not an effect primitive: " ++ e)
+parseEffectPrim e = parseFailureM ("parseEffectPrim: Not a symbol: " ++ show e)
+
+
+
 ------------------------------------------------------------
 -- Parse Helpers -------------------------------------------
 
@@ -671,6 +718,7 @@ inBitRange r i = (((- (2 ^ (r-1))) <= n) && (n <= ((2 ^ (r-1)) - 1)))
 
 isInt32 = inBitRange 32
 isInt64 = inBitRange 64
+isFixnum = inBitRange fixnumBits
 
 isUInt6 :: Integer -> Bool
 isUInt6 i = (0 <= i) && (i <= 63)
@@ -701,3 +749,76 @@ ash n = (* (2 ^ n))
 -- | Remove whitespace from both ends of a string.
 chomp :: String -> String
 chomp = reverse . dropWhile isSpace . reverse
+
+
+-- | Bit range of a valid boxed signed immediate integer
+fixnumBits :: Integer
+fixnumBits = 64 - (fromIntegral shiftFixnum)
+
+maskFixnum :: Int64
+maskFixnum = 0x7 -- 0b111
+
+maskPair :: Int64
+maskPair = 0x7 -- 0b111
+
+maskVector :: Int64
+maskVector = 0x7 -- 0b111
+
+maskProcedure :: Int64
+maskProcedure = 0x7 -- 0b111
+
+maskBoolean :: Int64
+maskBoolean = 0xF7 -- 0b11110111
+
+-- | Left-shift for integer immediates
+shiftFixnum :: Int
+shiftFixnum = 3
+
+-- | Tag for fixnum values
+tagFixnum :: Integer
+tagFixnum = 0x0
+
+-- | Tag for pair values
+tagPair :: Integer
+tagPair = 0x1
+
+-- | Tag for procedure values
+tagProcedure :: Integer
+tagProcedure = 0x2
+
+tagVector :: Integer
+tagVector = 0x3
+
+tagBoolean :: Integer
+tagBoolean = 0x6
+
+tagNonfixnum :: Integer
+tagNonfixnum = 0x6
+
+repFalse :: Integer
+repFalse = shiftL 0x0 shiftFixnum + tagNonfixnum
+
+repTrue :: Integer
+repTrue = shiftL 0x1 shiftFixnum + tagNonfixnum
+
+repNil :: Integer
+repNil = shiftL 0x2 shiftFixnum + tagNonfixnum
+
+repVoid :: Integer
+repVoid = shiftL 0x3 shiftFixnum + tagNonfixnum
+
+dispCar :: Integer
+dispCar = 0
+
+dispCdr :: Integer
+dispCdr = 8
+
+sizePair :: Integer
+sizePair = 2 * dispCdr
+
+dispVectorLength :: Integer
+dispVectorLength = 0
+
+dispVectorData :: Integer
+dispVectorData = 8
+

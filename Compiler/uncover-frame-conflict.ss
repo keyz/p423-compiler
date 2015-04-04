@@ -73,7 +73,8 @@ UFVar   ::= UVar | FVar                                 ;;      mod
   (import
     (chezscheme)
     (Framework match)
-    (Framework helpers))
+    (Framework helpers)
+    (Compiler utils))
 
   (define-who uncover-frame-conflict
 
@@ -114,11 +115,11 @@ UFVar   ::= UVar | FVar                                 ;;      mod
 	    (match x
               ;; a8 new
               [(mset! ,[Triv -> base-t] ,[Triv -> offset-t] ,[Triv -> t])
-               (union base-t offset-t t live*)]
+               (hunion base-t offset-t t live*)]
               ;; a8 new
               [(set! ,var (mref ,[Triv -> base-t] ,[Triv -> offset-t]))
-               (add-conflicts! ct var (union base-t offset-t live*))
-               (union base-t offset-t (remq var live*))]
+               (add-conflicts! ct var (hunion base-t offset-t live*))
+               (hunion base-t offset-t (remq var live*))]
               [(nop) live*]
 	      [(if ,test ,[c-live*] ,[a-live*])
 	       (Pred test c-live* a-live* ct)]
@@ -131,19 +132,19 @@ UFVar   ::= UVar | FVar                                 ;;      mod
 			  `(set! ,lhs ,rhs)))
 	       (Effect `(set! ,lhs ,rhs) (cons lhs live*) ct)]
 	      [(set! ,lhs (,binop ,[Triv -> x-live*] ,[Triv -> y-live*]))
-	       (let ([live* (difference live* `(,lhs))])
+	       (let ([live* (hdifference live* `(,lhs))])
 		 (when (or (uvar? lhs) (fixed? lhs))
 		   (add-conflicts! ct lhs live*))
-		 (union x-live* y-live* live*))]
+		 (hunion x-live* y-live* live*))]
 	      [(set! ,lhs ,var)
-	       (let ([live* (difference live* `(,lhs))])
+	       (let ([live* (hdifference live* `(,lhs))])
 		 (when (or (uvar? lhs) (fixed? lhs))
 		   (add-conflicts! ct lhs (remq var live*)))
-		 (union (Triv var) live*))]
+		 (hunion (Triv var) live*))]
 	      [(return-point ,label ,tail)
 	       (begin
-		 (set! call-live* (union call-live* live*))
-		 (union (Tail tail ct) live*))]
+		 (set! call-live* (hunion call-live* live*))
+		 (hunion (Tail tail ct) live*))]
 	      [,x (error who "invalid Effect list ~s" x)])))
 
 	(define Pred
@@ -155,7 +156,7 @@ UFVar   ::= UVar | FVar                                 ;;      mod
 	       (Pred test c-live* a-live* ct)]
 	      [(begin ,ef* ... ,[live*]) (Effect* ef* live* ct)]
 	      [(,relop ,[Triv -> x-live*] ,[Triv -> y-live*])
-	       (union t-live* f-live* x-live* y-live*)]
+	       (hunion t-live* f-live* x-live* y-live*)]
 	      [,x (error who "invalid Pred ~s" x)])))
 
 	(define Tail
@@ -165,7 +166,7 @@ UFVar   ::= UVar | FVar                                 ;;      mod
 	      [(if ,test ,[c-live*] ,[a-live*])
                (Pred test c-live* a-live* ct)]
 	      [(,[Triv -> target-live*] ,live* ...)
-	       (union target-live*
+	       (hunion target-live*
 		      (filter
 		       (lambda (x) (or (fixed? x) (uvar? x)))
 		       live*))]
@@ -178,7 +179,7 @@ UFVar   ::= UVar | FVar                                 ;;      mod
 	       (unless (null? uvar*)
 		 (error who "found variables ~s live on entry" uvar*)))
 	     (let* ([s-uvar* (filter uvar? call-live*)]
-		    [n-locs* (difference uvar* s-uvar*)]) ;; remember to difference!
+		    [n-locs* (hdifference uvar* s-uvar*)]) ;; remember to difference!
 	       `(locals (,n-locs* ...)
                   (new-frames (,frame* ...)
                     (spills ,s-uvar*

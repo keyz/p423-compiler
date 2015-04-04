@@ -46,10 +46,10 @@ data CompileState =
 
 -- | Run a P423 compiler.
 runCompiler :: P423Config -> CompileM a -> IO a
-runCompiler cfg m = do
-  sp <- if runWrappers cfg
-        then makeSchemeEvaluator
-        else return (error "Internal error.  Ran with runWrappers=False, thus should not use scheme process!")
+runCompiler cfg m = do 
+  sp <- makeSchemeEvaluator
+  -- return$ runPassM cfg $
+  --   evalStateT m (CompileState Nothing sp)
   evalStateT m (CompileState Nothing sp cfg)
 
 -- | When starting a new benchmark, it's necessary to do this.
@@ -72,17 +72,16 @@ runPass p code =
     do st@CompileState {runner,lastresult,cfg} <- get 
        let code' = pass p cfg code
        when (trace p) (lift$ printTrace (passName p) code')
-       when (runWrappers cfg) $ do 
-           res <- lift$ runWrapper runner wn code'
-           let res' = pack$ show res
-           case lastresult of
-             Nothing -> return ()
-             Just old | old == res' -> return ()
-                      | otherwise   -> error$"Output of pass "++pn++" did not match previous pass:\nGot: "
-                                       ++unpack res'++"\nExpected: "++unpack old
-
-           -- Update the last result by side effect:
-           put $ st{ lastresult= Just res' }
+       res <- lift$ runWrapper runner wn code'
+       let res' = pack$ show res
+       case lastresult of
+         Nothing -> return ()
+         Just old | old == res' -> return ()
+                  | otherwise   -> error$"Output of pass "++pn++" did not match previous pass:\nGot: "
+                                   ++unpack res'++"\nExpected: "++unpack old
+                                   
+       -- Update the last result by side effect:
+       put $ st{ lastresult= Just res' }
        return code'
 
   where pn = passName p

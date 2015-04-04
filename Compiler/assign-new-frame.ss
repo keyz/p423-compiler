@@ -76,7 +76,8 @@ Var     ::= UVar | Loc
   (import
     (chezscheme)
     (Framework match)
-    (Framework helpers))
+    (Framework helpers)
+    (Compiler utils))
 
   (define-who assign-new-frame
 
@@ -168,7 +169,7 @@ Var     ::= UVar | Loc
                    (call-live (,call-live* ...) ,tail)))))
 	   (let* ([size (get-size call-live* home*)]
 		  [n-frames (map (get-frames size) frame*)]
-		  [n-locs (difference local* (flatten frame*))])
+		  [n-locs (hdifference local* (flatten frame*))])
 	     `(locals (,n-locs ...)
                 (ulocals ()
                   (locate (,home* ... ,n-frames ... ...)

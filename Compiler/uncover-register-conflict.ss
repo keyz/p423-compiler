@@ -1,5 +1,7 @@
 #|
 
+;; union -> hunion
+
 A8 - Mar 6, 2015
 
 pass: uncover-register-conflict
@@ -75,7 +77,8 @@ Conflict ::= Reg | UVar                                  ;;      mod
   (import
     (chezscheme)
     (Framework helpers)
-    (Framework match))
+    (Framework match)
+    (Compiler utils))
 
   (define-who uncover-register-conflict
 
@@ -114,11 +117,11 @@ Conflict ::= Reg | UVar                                  ;;      mod
 	    (match x
               ;; a8 new
               [(mset! ,[Triv -> base-t] ,[Triv -> offset-t] ,[Triv -> t])
-               (union base-t offset-t t live*)]
+               (hunion base-t offset-t t live*)]
               ;; a8 new
               [(set! ,var (mref ,[Triv -> base-t] ,[Triv -> offset-t]))
-               (add-conflicts! ct var (union base-t offset-t live*))
-               (union base-t offset-t (remq var live*))]
+               (add-conflicts! ct var (hunion base-t offset-t live*))
+               (hunion base-t offset-t (remq var live*))]
 	      [(nop) live*]
 	      [(if ,test ,[c-live*] ,[a-live*])
 	       (Pred test c-live* a-live* ct)]
@@ -131,15 +134,15 @@ Conflict ::= Reg | UVar                                  ;;      mod
 			  `(set! ,lhs ,rhs)))
 	       (Effect `(set! ,lhs ,rhs) (cons lhs live*) ct)]
 	      [(set! ,lhs (,binop ,[Triv -> x-live*] ,[Triv -> y-live*]))
-	       (let ([live* (difference live* `(,lhs))])
+	       (let ([live* (hdifference live* `(,lhs))])
 		 (when (or (uvar? lhs) (fixed? lhs))
 		   (add-conflicts! ct lhs live*))
-		 (union x-live* y-live* live*))]
+		 (hunion x-live* y-live* live*))]
 	      [(set! ,lhs ,var)
-	       (let ([live* (difference live* `(,lhs))])
+	       (let ([live* (hdifference live* `(,lhs))])
 		 (when (or (uvar? lhs) (fixed? lhs))
 		   (add-conflicts! ct lhs (remq var live*)))
-		 (union (Triv var) live*))]
+		 (hunion (Triv var) live*))]
 	      [(return-point ,label ,tail) ;; new
 	       (Tail tail ct)]
 	      [,x (error who "invalid Effect list ~s" x)])))
@@ -153,7 +156,7 @@ Conflict ::= Reg | UVar                                  ;;      mod
 	       (Pred test c-live* a-live* ct)]
 	      [(begin ,ef* ... ,[live*]) (Effect* ef* live* ct)]
 	      [(,relop ,[Triv -> x-live*] ,[Triv -> y-live*])
-	       (union t-live* f-live* x-live* y-live*)]
+	       (hunion t-live* f-live* x-live* y-live*)]
 	      [,x (error who "invalid Pred ~s" x)])))
 
 	(define Tail
@@ -162,7 +165,7 @@ Conflict ::= Reg | UVar                                  ;;      mod
 	      [(begin ,ef* ... ,[live*]) (Effect* ef* live* ct)]
 	      [(if ,test ,[c-live*] ,[a-live*]) (Pred test c-live* a-live* ct)]
 	      [(,[Triv -> target-live*] ,live* ...)
-	       (union target-live*
+	       (hunion target-live*
 		      (filter
 		       (lambda (x) (or (fixed? x) (uvar? x)))
 		       live*))]

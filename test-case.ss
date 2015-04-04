@@ -1,9 +1,4 @@
-(letrec ([len$0 (lambda (ls.1)
-		     (locals (size.2)
-			     (begin
-			       (set! size.2 (mref ls.1 0))
-			       size.2)))])
-  (locals (ls.1)
-	  (begin
-	    (set! ls.1 (alloc 12))
-	    (len$0 ls.1))))
+(letrec ([f$1 (lambda (x.1) x.1)])
+  (let ([f.2 f$1])
+    (let ([f.3 f.2])
+      (f.3 (quote 42)))))
