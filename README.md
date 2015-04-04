@@ -28,4 +28,4 @@ Effect    ::= (let ([UVar Value] *) Effect)
 Immediate ::= fixnum | () | #t | #f
 ```
 
-For more information, please refer to the [course page](http://homes.soic.indiana.edu/classes/spring2015/csci/p423-rrnewton/) of CSCI-P 423 at Indiana University. Unless otherwise specified, I don’t own any files besides the ones under `Compiler`.
+For more information, please refer to the [course page](http://homes.soic.indiana.edu/classes/spring2015/csci/p423-rrnewton/) of CSCI-P 423 at Indiana University. Unless otherwise specified, I only own the files under `Compiler`.
