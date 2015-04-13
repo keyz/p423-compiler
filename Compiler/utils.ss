@@ -1,5 +1,8 @@
 (library (Compiler utils)
   (export
+    graphq-add
+    graphq-get-arcs
+    graphq-dfs
     hset?
     hset-init
     hset-push
@@ -16,6 +19,54 @@
     (Framework helpers)
     (Framework match))
 
+  ;; graph related stuffs. just for fun.
+
+  ;; a better union for lists
+  (define (unionq ls1 ls2)
+    (let loop ([ls1 ls1] [ls2 ls2] [acc ls2])
+      (cond
+       [(null? ls2) ls1]
+       [(null? ls1) acc]
+       [else (loop (cdr ls1)
+                   ls2
+                   (if (memq (car ls1) acc)
+                       acc
+                       (cons (car ls1) acc)))])))
+
+  ;; graphq-add: adds a node and its neighbors to a graph
+  (define (graphq-add node arcs graph)
+    (cond
+     [(assq node graph)
+      (let loop ([node node] [arcs arcs] [graph graph] [acc '()])
+        (cond
+         [(null? graph) acc]
+         [(eq? node (caar graph))
+          (loop node arcs (cdr graph) (cons `(,node . ,(unionq arcs (cdar graph))) acc))]
+         [else (loop node arcs (cdr graph) (cons (car graph) acc))]))]
+     [else (cons `(,node . ,arcs) graph)]))
+
+  ;; graphq-get-arcs: gets a node's neighbors, if there are. otherwise #f
+  (define (graphq-get-arcs node graph)
+    (cond
+     [(assq node graph) => cdr]
+     [else #f]))
+
+  ;; graphq-dfs: gets a node's neighbors. dfs.
+  (define (graphq-dfs node graph)
+    (let loop ([stack `(,node)] [acc '()] [visited '()])
+      (cond
+       [(null? stack) acc]
+       [(graphq-get-arcs (car stack) graph) =>
+        (lambda (ls)
+          (if (memq (car stack) visited)
+              (loop (cdr stack) acc visited) ;; visited, do nothing
+              (loop (append ls (cdr stack)) acc (cons (car stack) visited))))]
+       [else
+        (if (memq (car stack) visited)
+            (loop (cdr stack) acc visited) ;; visited, do nothing
+            (loop (cdr stack) (cons (car stack) acc) (cons (car stack) visited)))])))
+
+  
   ;; hset related stuffs: a faster set implementation using hashtable
 
   ;; hset-dummy: a dummy value for hsets
@@ -131,19 +182,19 @@
     (lambda args
       (hset->list
        (apply hset-union
-        (map list->hset args)))))
+              (map list->hset args)))))
 
   (define hintersection
     (lambda args
       (hset->list
        (apply hset-intersection
-        (map list->hset args)))))
+              (map list->hset args)))))
   
   (define hdifference
     (lambda args
       (hset->list
        (apply hset-difference
-        (map list->hset args)))))
+              (map list->hset args)))))
 
   )
 

@@ -71,32 +71,35 @@ data Ind = I Reg Reg deriving (Read,Show,Eq, Ord)
 ----------------------------------------
 
 data PredPrim = Lt | Lte | Eq | Gte | Gt
-              | BooleanP | EqP | FixnumP | NullP | PairP | VectorP 
+              | BooleanP | EqP | FixnumP | NullP | PairP | VectorP | ProcedureP 
      deriving (Read, Show, Eq, Ord)
               
-data EffectPrim = SetCar | SetCdr | VectorSet
+data EffectPrim = SetCar | SetCdr | VectorSet | ProcedureSet
      deriving (Read, Show, Eq, Ord)
               
 data ValPrim = Times | Plus | Minus | Car | Cdr | Cons
              | MakeVector | VectorLength | VectorRef | Void
+             | MakeProcedure | ProcedureCode | ProcedureRef
      deriving (Read, Show, Eq, Ord)
               
 valPrimArity :: ValPrim -> Int
 valPrimArity vp =
   case vp of
     Times -> 2 ; Plus -> 2 ; Minus -> 2 ; Car -> 1 ; Cdr -> 1 ; Cons -> 2
-    MakeVector -> 1 ; VectorLength -> 1 ; VectorRef -> 2 ; Void -> 0
+    MakeVector -> 1 ; VectorLength -> 1 ; VectorRef -> 2 ; Void -> 0 ; MakeProcedure -> 2
+    ProcedureCode -> 1 ; ProcedureRef -> 2
     
 predPrimArity :: PredPrim -> Int
 predPrimArity pp =
   case pp of
     Lt -> 2 ; Lte -> 2 ; Eq -> 2 ; Gte -> 2 ; Gt -> 2
     BooleanP -> 1 ; EqP -> 2 ; FixnumP -> 1 ; NullP -> 1 ; PairP -> 1 ; VectorP -> 1
+    ProcedureP -> 1
 
 effectPrimArity :: EffectPrim -> Int
 effectPrimArity ep =
   case ep of 
-    SetCar -> 2 ; SetCdr -> 2 ; VectorSet -> 3
+    SetCar -> 2 ; SetCdr -> 2 ; VectorSet -> 3 ; ProcedureSet -> 3
 
 data Immediate = Fixnum Int64 | NullList | HashT | HashF
      deriving (Read, Show, Eq, Ord)

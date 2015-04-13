@@ -1,10 +1,16 @@
 ;; P423 / P523
-;; Week 9 grammars
+;; Week 12 grammars
 ;;
 ;; Passes:
 ;;   verify-scheme              l-01 -> l-01
-;;   uncover-locals             l-01 -> l-20
-;;   remoove-let                l-20 -> l-21
+;;   uncover-free               l-01 -> l-09
+;;   convert-closures           l-09 -> l-10
+;;   introduce-procedure-primitives l-10 -> l-15
+;;   lift-letrec                l-01 -> l-17
+;;   normalize-context          l-17 -> l-18
+;;   specify-representation     l-18 -> l-19
+;;   uncover-locals             l-19 -> l-20
+;;   remove-let                 l-20 -> l-21
 
 ;;   verify-uil                 l-22 -> l-22
 ;;   remove-complex-opera*      l-22 -> l-23
@@ -23,44 +29,96 @@
 ;;   finalize-locations         l-35 -> l-36
 ;;   expose-frame-var           l-36 -> l-37
 ;;   expose-basic-blocks        l-37 -> l-39
+;;   optimize-jumps             l-39 -> l-39
 ;;   flatten-program            l-39 -> l-41
 ;;   generate-x86-64            l-41 -> ()
 
 (p423-grammars
 
-  (l01-verify-scheme
+ (l01-verify-scheme
     (start Prog)
-    (Prog
+    (Prog Expr)
+    (Expr     
+      (quote Immediate)
+      (let ([UVar Expr]*) Expr)
+;      (letrec ((Label (lambda (UVar *) Expr)) *) Expr)
+      (letrec ((UVar (lambda (UVar *) Expr)) *) Expr)
+      (if Expr Expr Expr)
+      (begin Expr * Expr)
+      (ValPrim Expr *)
+      (EffectPrim Expr *)
+      (PredPrim Expr *)
+      (Expr Expr *)
+      UVar Label)
+    ; (Immediate fixnum () #t #f) ;; BUILTIN!
+    )
+
+  (l09-uncover-free
+     (%remove (Expr letrec))
+     (%add
+       (Expr
+         (letrec ((UVar (lambda (UVar *) (free (UVar *) Expr))) *) Expr)
+       )
+     )
+  )
+
+  (l10-convert-closures
+     (%remove (Expr letrec))
+     (%add
+       (Expr
+         (letrec ((Label (lambda (UVar *) (bind-free (UVar *) Expr))) *) (closures ((UVar Label UVar *) *) Expr))
+         Label
+       )
+     )
+  )
+
+  (l15-introduce-procedure-primitives
+     (%remove (Expr letrec))
+     (%add
+       (Expr
+         (letrec ((Label (lambda (UVar *) Expr)) *) Expr)
+       )
+     )
+  )  
+
+  (l17-lift-letrec
+    (%remove Prog (Expr letrec)) ;; Remove ALL.  Start fresh.
+    (%add 
+     (Prog (letrec ((Label (lambda (UVar *) Expr)) *) Expr)))
+    )
+
+  (l18-normalize-context
+    (%remove Prog Expr)  ;; Remove ALL.  Start fresh.
+    (%add
+     (Prog
       (letrec ((Label (lambda (UVar *) Value)) *) Value))
-    (Pred
+     (Pred
       (let ([UVar Value]*) Pred)
       (true)
       (false)
       (if Pred Pred Pred)
       (begin Effect * Pred)
       (PredPrim Value *))
-    (Effect
+     (Effect
       (let ([UVar Value]*) Effect)
       (nop)
       (if Pred Effect Effect)
       (begin Effect * Effect)
       (EffectPrim Value *)
       (Value Value *))
-    (Value
+     (Value
       (quote Immediate)
       (let ([UVar Value]*) Value)
       (if Pred Value Value)
       (begin Effect * Value)
       (ValPrim Value *)
       (Value Value *)
-      UVar Label)
-    ; (Immediate fixnum () #t #f) ;; BUILTIN!
+      UVar Label))
     )
 
   (l19-specify-representation
    (%remove Prog Pred Effect Value)  ;; Remove ALL.  Start fresh.
    (%add
-;    (start Prog)
     (Prog
       (letrec ((Label (lambda (UVar *) Tail)) *) Tail))
     (Tail
@@ -106,7 +164,8 @@
     (Prog (letrec ((Label (lambda (UVar *) Body)) *) Body))
     (Body (locals (UVar *) Tail))))
 
-  (l21-remove-let
+;  (l21-remove-let
+  (l22-verify-uil
    (%remove 
     (Tail let)
     (Pred let)
@@ -114,7 +173,7 @@
     (Value let))
    (%add (Effect (set! UVar Value))))
 
-  (l22-verify-uil)
+;  (l22-verify-uil)
 
  ;; Replace Value with Triv in arguments of procedure calls and primitive application.
  (l23-remove-complex-opera
@@ -136,7 +195,8 @@
 	    (Triv Triv *))
      (Effect 
       (mset! Triv Triv Triv)
-      (Triv Triv *))))
+      (Triv Triv *)
+      )))
 
  ;; Remove Value, set! rhs may only be Triv or Binop.
  ;; We could treat mref's as Binops and save a bit in the grammar, but
@@ -144,15 +204,15 @@
  (l24-flatten-set
    (%remove
      Value
-     (Effect set! Triv))
+     (Effect set! UVar (alloc Triv)))
    (%add
      (Effect
-       (set! UVar (alloc Triv))
-       (set! UVar (mref Triv Triv))
        (set! UVar Triv)
        (set! UVar (Binop Triv Triv))
        (set! UVar (Triv Triv *))
-       (Triv Triv *))))
+       (set! UVar (alloc Triv))
+       (set! UVar (mref Triv Triv))
+       )))
 
  ;; alloc/mref will only occur on the RHS of set! after this pass:
  (l25-impose-calling-conventions
@@ -195,6 +255,20 @@
 	    ;; Remove alloc!
 	    (set! Var (mref Triv Triv))
 	    )))
+
+ (l26-expose-allocation-pointer
+   (%remove
+     (Effect set!)
+     )
+   (%add
+     (Effect
+       (set! Var Triv)
+;       (set! Var (alloc Triv))
+       (set! Var (Binop Triv Triv))
+       (set! Var (mref Triv Triv))
+       )
+     )
+   )
 
  (l27-uncover-frame-conflict
     (%remove 
@@ -314,6 +388,8 @@
   (%add
     (Tail
       (if (Relop Triv Triv) (Label) (Label)))))
+
+;; No l40, optimize-jumps uses l39.
 
 (l41-flatten-program
   (%remove

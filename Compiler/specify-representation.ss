@@ -1,5 +1,23 @@
 #|
 
+A12 - Apr 12, 2015
+modified `common.ss` to support closure & first-class procedures:
+- primitives += make-procedure procedure-code procedure-ref procedure-set! procedure?
+- value-prim? += make-procedure procedure-code procedure-ref
+- pred-prim? += procedure?
+- effect-prim? += procedure-set!
+
+In detail:
+- procedure? \sim pair? or vector?
+- make-procedure \sim make-vector,
+    - size arg should be a constant
+- procedure-code \sim vector-length,
+- procedure-ref \sim vector-ref
+    - index arg should be a constant
+- procedure-set! \sim vector-set!.
+    - index arg should be a constant
+
+
 A10 - Mar 29, 2015
 
 pass: specify-representation
@@ -21,13 +39,13 @@ Pred      ::= (let ([UVar Value] *) Pred)
             | (false)
             | (if Pred Pred Pred)
             | (begin Effect * Pred)
-            | (PredPrim Value *))
+            | (PredPrim Value *)
 Effect    ::= (let ([UVar Value] *) Effect)
             | (nop)
             | (if Pred Effect Effect)
             | (begin Effect * Effect)
             | (EffectPrim Value *)
-            | (Value Value *))
+            | (Value Value *)
 Value     ::= (quote Immediate)
             | (let ([UVar Value] *) Value)
             | (if Pred Value Value)
@@ -53,6 +71,9 @@ ValPrim:
 (vector-length . 1)
 (vector-ref . 2)
 (void . 0)
+(make-procedure . 2)
+(procedure-code . 1)
+(procedure-ref . 2)
 
 PredPrim:
 (< . 2)
@@ -66,11 +87,13 @@ PredPrim:
 (null? . 1)
 (pair? . 1)
 (vector? . 1)
+(procedure? . 1)
 
 EffectPrim:
 (set-car! . 2)
 (set-cdr! . 2)
 (vector-set! . 3)
+(procedure-set! . 3)
 
 |#
 
@@ -85,15 +108,6 @@ EffectPrim:
     (Compiler utils))
 
   (define-who specify-representation
-
-    (define (value-prim? x)
-      (memq x '(+ - * car cdr cons make-vector vector-length vector-ref void)))
-
-    (define (pred-prim? x)
-      (memq x '(< <= = >= > boolean? eq? fixnum? null? pair? vector?)))
-
-    (define (effect-prim? x)
-      (memq x '(set-car! set-cdr! vector-set!)))
 
     (define (Immediate immediate)
       (match immediate
@@ -113,6 +127,10 @@ EffectPrim:
          (if (integer? i)
              `(mset! ,vec ,(+ (- disp-vector-data tag-vector) i) ,x) ;; compile-time
              `(mset! ,vec (+ ,(- disp-vector-data tag-vector) ,i) ,x))] ;; run-time
+        [(procedure-set! ,proc ,i ,val) ;; a12 new
+         (if (integer? i)
+             `(mset! ,proc ,(+ (- disp-procedure-data tag-procedure) i) ,val)
+             (errorf who "procedure-set! ~s: index arg should be a constant" `(procedure-set! ,proc ,i ,val)))]
         [,else (errorf who "invalid EffectPrim ~s" else)]))
 
     (define (Effect effect)
@@ -146,6 +164,8 @@ EffectPrim:
          `(= (logand ,p ,mask-pair) ,tag-pair)]
         [(vector? ,v)
          `(= (logand ,v ,mask-vector) ,tag-vector)]
+        [(procedure? ,p) ;; a12 new
+         `(= (logand ,p ,mask-procedure) ,tag-procedure)]
         [,else (errorf who "invalid PredPrim ~s" else)]))
     
     (define (Pred pred)
@@ -196,12 +216,26 @@ EffectPrim:
                   (begin
                     (mset! ,tmp ,(- disp-vector-length tag-vector) ,len)
                     ,tmp))))]
+        [(make-procedure ,code ,size) ;; a12 new
+         (let ([tmp (unique-name 'proc)])
+           (if (integer? size)
+               `(let ([,tmp (+ (alloc ,(+ disp-procedure-data size)) ,tag-procedure)])
+                  (begin
+                    (mset! ,tmp ,(- disp-procedure-code tag-procedure) ,code)
+                    ,tmp))
+               (errorf who "make-procedure ~s: size arg should be a constant" `(make-procedure ,code ,size))))]
         [(vector-length ,vec)
          `(mref ,vec ,(- disp-vector-length tag-vector))]
+        [(procedure-code ,p) ;; a12 new
+         `(mref ,p ,(- disp-procedure-code tag-procedure))]
         [(vector-ref ,vec ,i)
          (if (integer? i) 
              `(mref ,vec ,(+ (- disp-vector-data tag-vector) i)) ;; compile-time
              `(mref ,vec (+ ,(- disp-vector-data tag-vector) ,i)))] ;; run-time
+        [(procedure-ref ,proc ,i) ;; a12 new
+         (if (integer? i)
+             `(mref ,proc ,(+ (- disp-procedure-data tag-procedure) i))
+             (errorf who "procedure-ref ~s: index arg should be a constant" `(procedure-ref ,proc ,i)))]
         [(void) $void]
         [,else (errorf who "invalid ValuePrim ~s" else)]))
 

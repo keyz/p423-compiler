@@ -25,9 +25,19 @@
     new-frames
     (rename (p423-* *))
     (rename (p423-+ +))
-    (rename (p423-- -)))
+    (rename (p423-- -))
+    free
+    bind-free
+    fill-closure!
+    closures
+    cookie
+    procedure 
+    procedure-code procedure?
+    make-procedure
+    procedure-set!
+    procedure-ref)
   (import
-    (except (chezscheme) set! letrec)
+    (except (chezscheme) set! procedure?)
     (Framework match)
     (Framework helpers))
 
@@ -251,11 +261,67 @@
         (errorf who "result ~s is outside of fixnum range" ans))
       ans)))
 
+(define-syntax free
+    (syntax-rules ()
+      [(_ (var ...) expr) expr]))
+
+
+(define-syntax bind-free
+  (lambda (x)
+    (syntax-case x ()
+      [(_ (cp fv ...) body)
+       (with-syntax ([(i ...) (enumerate #'(fv ...))])
+         #'(let ()
+             (define-syntax fv
+               (identifier-syntax
+                 (vector-ref (cp cookie) i)))
+             ...
+             body))])))
+
+(define fill-closure!
+  (lambda (cp . free)
+    (let ([env (cp cookie)])
+      (for-each
+        (lambda (i x) (vector-set! env i x))
+        (enumerate free)
+        free))))
+
+(define-syntax closures
+  (syntax-rules ()
+    [(_ ([name code free ...] ...) body)
+     (letrec ([name (let ([env (make-vector (length '(free ...)))])
+                           (lambda args
+                             (if (and (= (length args) 1)
+                                      (eq? (car args) cookie))
+                                 env
+                                 (apply code args))))]
+                   ...)
+       (fill-closure! name free ...)
+       ...
+       body)]))
+
+(define-record procedure ((immutable code) (immutable env)) ()
+    ([constructor $make-procedure]))
+
+(define make-procedure
+    (lambda (code i)
+      ($make-procedure code (make-vector i))))
+
+(define procedure-ref
+    (lambda (cp i)
+      (vector-ref (procedure-env cp) i)))
+
+(define procedure-set!
+    (lambda (cp i v)
+      (vector-set! (procedure-env cp) i v)))
+
 (define (true) #t)
 
 (define (false) #f)
 
 (define (nop) (void))
+
+(define cookie (cons "snicker" "doodle"))
 
 (define ptr->datum
   (lambda (ptr)
@@ -286,6 +352,7 @@
                       (+ disp-vector-data (fxsll i word-shift))
                       ptr))))))]
         [else (errorf 'ptr->datum "can't handle ~s" ptr)]))))
+
 )
 
 (library (Framework wrappers)
@@ -293,6 +360,12 @@
     pass->wrapper
     source/wrapper
     verify-scheme/wrapper
+    uncover-free/wrapper
+    convert-closures/wrapper
+    introduce-procedure-primitives/wrapper
+    lift-letrec/wrapper
+    normalize-context/wrapper
+    optimize-jumps/wrapper
     specify-representation/wrapper
     uncover-locals/wrapper
     remove-let/wrapper
@@ -349,6 +422,11 @@
     (case pass
       ((source) source/wrapper)
       ((verify-scheme) verify-scheme/wrapper)
+      ((uncover-free) uncover-free/wrapper)
+      ((convert-closures) convert-closures/wrapper)
+      ((introduce-procedure-primitives) introduce-procedure-primitives/wrapper)
+      ((lift-letrec) lift-letrec/wrapper)
+      ((normalize-context) normalize-context/wrapper)
       ((specify-representation) specify-representation/wrapper)
       ((uncover-locals) uncover-locals/wrapper)
       ((remove-let) remove-let/wrapper)
@@ -370,6 +448,7 @@
       ((expose-frame-var) expose-frame-var/wrapper)
       ((expose-memory-operands) expose-memory-operands/wrapper)
       ((expose-basic-blocks) expose-basic-blocks/wrapper)
+      ((optimize-jumps) optimize-jumps/wrapper)
       ((flatten-program) flatten-program/wrapper)
       ((generate-x86-64) generate-x86-64/wrapper)
       (else (errorf 'pass->wrapper
@@ -383,17 +462,69 @@
   (source/wrapper verify-scheme/wrapper)
   (x)
   (environment env)
-  ,alloc
   (import
-    (only (Framework wrappers aux)
-      handle-overflow true false nop
-      * + -)
+    (only (Framework wrappers aux) * + -)
     (except (chezscheme) * + -))
   (reset-machine-state!)
   ,x)
 
+
 ;;-----------------------------------
-;; specify-representation
+;; uncover-free/wrapper/wrapper
+;;-----------------------------------
+(define-language-wrapper uncover-free/wrapper
+  (x)
+  (environment env)
+  (import
+    (only (Framework wrappers aux) * + - free)
+    (except (chezscheme) * + -))  
+  ,x)
+
+;;-----------------------------------
+;; convert-closures/wrapper
+;;-----------------------------------
+(define-language-wrapper convert-closures/wrapper
+  (x)
+  (environment env)
+  (import
+    (only (Framework wrappers aux)
+      * + - cookie bind-free fill-closure! closures)
+    (except (chezscheme) * + -))
+  ,x)
+
+;;----------------------------------------
+;; introduce-procedure-primitives/wrapper
+;; lift-letrec/wrapper
+;;----------------------------------------
+(define-language-wrapper
+  (introduce-procedure-primitives/wrapper lift-letrec/wrapper)
+  (x) 
+  (environment env)
+  (import
+    (only (Framework wrappers aux)
+      * + - procedure make-procedure procedure-ref procedure-set! 
+            procedure-code procedure?)
+    (except (chezscheme) * + - procedure?))
+  ,x)
+
+;;-----------------------------------
+;; normalize-context/wrapper
+;;-----------------------------------
+(define-language-wrapper
+  normalize-context/wrapper
+  (x)
+  (environment env)
+  (import
+    (only (Framework wrappers aux)
+      true false nop * + -
+      procedure make-procedure procedure-ref procedure-set!
+      procedure-code procedure?)
+    (except (chezscheme) * + - procedure?))
+  (reset-machine-state!)
+  ,x)
+
+;;-----------------------------------
+;; specify-representation/wrapper
 ;;-----------------------------------
 (define-language-wrapper
   specify-representation/wrapper
@@ -660,7 +791,9 @@
 ;;-----------------------------------
 ;; expose-basic-blocks/wrapper
 ;;-----------------------------------
-(define-language-wrapper expose-basic-blocks/wrapper (x)
+(define-language-wrapper
+  (expose-basic-blocks/wrapper optimize-jumps/wrapper)
+  (x)
   (environment env)
   ,set!
   (import
@@ -697,9 +830,6 @@
                   (format "exec '~a'" program)
                   (buffer-mode block)
                   (native-transcoder))])
-    ;(import (only (Framework wrappers aux) ptr->datum))
-    ;(ptr->datum (read in))
-    (get-line in)
-    ))
+    (get-line in)))
 
 )

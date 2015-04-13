@@ -158,6 +158,7 @@
 (define PredPrim   (lambda (x) (if (checkPredPrim x) #f   (invalid-expr 'PredPrim x))))
 
 (define Immediate (lambda (x) (if (isImmediate x) #f   (invalid-expr 'Immediate x))))
+
 (define Datum (lambda (x) (if (isDatum x) #f   (invalid-expr 'Datum x))))
 
 )
