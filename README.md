@@ -2,6 +2,12 @@
 
 Archive repo of a Scheme to x86-64 compiler in Scheme.
 
+Supports:
+- closures
+- first-class procedures
+- side effects with `set!`
+- closure conversion, tail-call elimination, branch predication, constant folding, dead-code elimination, and several other optimizations
+
 The supported BNF is listed as below.
 ```
 Program   ::= Expr
