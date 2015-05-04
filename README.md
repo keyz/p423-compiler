@@ -6,7 +6,7 @@ Supports:
 - closures
 - first-class procedures
 - side effects with `set!`
-- closure conversion, tail-call elimination, branch predication, constant folding, dead-code elimination, and several other optimizations
+- closure conversion, tail-call elimination, branch predication, constant folding, dead-code elimination, and... several other optimizations
 
 The supported BNF is listed as below.
 ```
