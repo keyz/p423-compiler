@@ -12,6 +12,7 @@ module FrameworkHs.Prims
   , PredPrim(..), EffectPrim (..), ValPrim(..)
   , valPrimArity, effectPrimArity, predPrimArity
   , Immediate(..)
+  , Datum(..)    
   )
   where
 
@@ -103,3 +104,8 @@ effectPrimArity ep =
 
 data Immediate = Fixnum Int64 | NullList | HashT | HashF
      deriving (Read, Show, Eq, Ord)
+
+data Datum = PairDatum Datum Datum
+           | VectorDatum [Datum]
+           | ImmediateDatum Immediate
+     deriving (Read, Show, Eq, Ord)              

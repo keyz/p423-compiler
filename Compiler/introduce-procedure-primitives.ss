@@ -104,7 +104,7 @@ Immediate ::= fixnum | () | #t | #f
            `(if ,test ,then ,else)]
           [(begin ,[exp*] ... ,[exp])
            `(begin ,exp* ... ,exp)]
-          [(,prim ,[exp*] ...) (guard (prim? prim))
+          [(,prim ,[exp*] ...) (guard (or (prim? prim) (label? prim))) ;; oh
            `(,prim ,exp* ...)]
           [(,[rator] ,[rator] ,[rand*] ...)
            `((procedure-code ,rator) ,rator ,rand* ...)]

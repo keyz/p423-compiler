@@ -1,5 +1,7 @@
 (library (Compiler common)
   (export
+    immediate-with-d?
+    immediate?
     binop?
     relop?
     triv?
@@ -8,12 +10,20 @@
     pred-prim?
     effect-prim?
     prim?)
-  
-  (import
-    (chezscheme)
-    (Framework match)
-    (Framework helpers))
 
+  (import (chezscheme) (Framework match) (Framework helpers))
+  
+  (define (immediate-with-d? imm)
+    (or (immediate? imm)
+        (pair? imm)
+        (vector? imm)))
+  
+  (define (immediate? imm)
+    (or (memq imm '(#t #f ()))
+        (and (integer? imm)
+             (exact? imm)
+             (fixnum-range? imm))))
+  
   (define (binop? x)
     (memq x '(mref + - * logand logor sra)))
   

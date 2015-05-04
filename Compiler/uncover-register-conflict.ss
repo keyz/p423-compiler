@@ -186,6 +186,7 @@ Conflict ::= Reg | UVar                                  ;;      mod
                   (locate (,home* ...)
                     (frame-conflict ,fct
                       (register-conflict ,ct ,tail))))))]
+          [(locate (,home* ...) ,tail) `(locate (,home* ...) ,tail)] ;; oh.
 	  [,x (errorf who "invalid Body ~s" x)])))
 
     (lambda (x)

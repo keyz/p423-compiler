@@ -136,8 +136,7 @@ RELOP2[(relop Var Triv)]
 
 (library (Compiler select-instructions)
   (export select-instructions)
-  (import (chezscheme) (Framework match) (Framework helpers)
-    (Compiler pmunit))
+  (import (chezscheme) (Framework match) (Framework helpers))
 
   (define-who select-instructions
     (define (ur? x) (or (register? x) (uvar? x)))

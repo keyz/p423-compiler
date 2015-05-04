@@ -1,4 +1,5 @@
 #|
+
 A12 - Apr 09, 2015
 
 pass: convert-closures
@@ -117,29 +118,6 @@ Immediate ::= fixnum | () | #t | #f
         [,uvar (guard (uvar? uvar)) uvar]
         [,el (errorf who "Invalid Expr ~s" el)]))
 
-    ;; gets rid of duplicate suffixes. since `convert-closures` is the first pass to use `unique-*`, it should be responsible for setting the global counter properly.
-    (define set-global-name-count!
-      (lambda (ls)
-        (define (flatten orig-sexp) ;; DFS
-          (let loop ([sexp orig-sexp] [acc '()])
-            (cond
-             [(null? sexp) acc]
-             [(pair? sexp) (loop (car sexp) (loop (cdr sexp) acc))]
-             [else (cons sexp acc)])))
-        (define (find-max-count ls)
-          (let loop ([ls (flatten ls)] [count 0])
-            (cond
-             [(null? ls) count]
-             [(uvar? (car ls))
-              (let ([n (string->number (extract-suffix (car ls)))])
-                (if (> n count)
-                    (loop (cdr ls) n)
-                    (loop (cdr ls) count)))]
-             [else (loop (cdr ls) count)])))
-
-        (unique-name-count (find-max-count ls))))
-    
     (lambda (prog)
-      (set-global-name-count! prog)
       (Expr prog)))
   )

@@ -557,6 +557,25 @@ instance PP Immediate where
     HashT -> "#t"
     HashF -> "#f"
 
+instance PP Datum where
+  pp p = case p of
+    PairDatum car cdr ->
+      case gatherPairs cdr of
+        Just ls -> parens (pp car `mappend` (mconcat (map ((spc `mappend`) . pp) ls)))
+        Nothing -> parens (pp car `mappend` (fromString " . ") `mappend` pp cdr)
+    VectorDatum ls -> fromString "#" `mappend`
+                      parens (mconcat (intersperse spc (map pp ls)))
+    ImmediateDatum i -> pp i
+   where
+     spc        = fromString " "
+     parens bld = fromString "(" `mappend` bld `mappend` fromString ")"
+     gatherPairs (ImmediateDatum NullList) = Just []
+     gatherPairs (PairDatum x y) = 
+        case gatherPairs y of
+           Nothing -> Nothing
+           Just ls -> Just (x:ls)
+     gatherPairs _ = Nothing
+
 ------------------------------------------------------------
 -- Parsing -------------------------------------------------
 

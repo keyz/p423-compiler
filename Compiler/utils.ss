@@ -75,7 +75,7 @@
   ;; (hset? s): returns true iff s is a hashtable (i.e., contains unique items)
   (define (hset? s)
     (hashtable? s))
-
+  
   ;; (hset-init): creates a new set. uses equal? for possible number/list comparisons.
   (define (hset-init)
     (make-hashtable equal-hash equal?))
@@ -138,24 +138,22 @@
          (begin
            (vector-for-each
             (lambda (x)
-              (if (hashtable-contains? hs2 x)
-                  (hset-push x result)
-                  (void)))
+              (when (hashtable-contains? hs2 x)
+                (hset-push x result)))
             (hashtable-keys hs1))
            result)))
       ([hs1 . hss]
        (let ([result (hset-init)])
-         (let loop ([hss hss])
-           (cond
-            [(null? hss) result]
-            [else
-             (begin
-               (vector-for-each
-                (lambda (x)
-                  (if (andmap (lambda (hs) (hashtable-contains? hs x)) hss)
-                      (hset-push x result)
-                      (void)))
-                (hashtable-keys hs1)))]))))))
+         (cond
+          [(null? hss) result]
+          [else
+           (begin 
+             (vector-for-each
+              (lambda (x)
+                (when (andmap (lambda (hs) (hashtable-contains? hs x)) hss)
+                  (hset-push x result)))
+              (hashtable-keys hs1))
+             result)])))))
 
   ;; (hset-difference hs1 hs2): returns a new hset containing all the
   ;; items from hs1 that were not in hs2. no mutation on any arguments.
@@ -180,15 +178,22 @@
   
   (define hunion
     (lambda args
-      (hset->list
-       (apply hset-union
-              (map list->hset args)))))
+      (let ([result (hset-init)])
+        (for-each (lambda (ls)
+                    (for-each (lambda (x)
+                                (unless (hashtable-contains? result x)
+                                  (hset-push x result)))
+                              ls))
+                  args)
+        (hset->list result))))
 
   (define hintersection
     (lambda args
-      (hset->list
-       (apply hset-intersection
-              (map list->hset args)))))
+      (if (null? args)
+          '()
+          (hset->list
+           (apply hset-intersection
+                  (map list->hset args))))))
   
   (define hdifference
     (lambda args
